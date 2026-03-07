@@ -59,7 +59,7 @@ def build_features(df):
         columns=[
             "SMILES","poli1","poli2","poli3",
             "GMT","MBR",
-            "JPR","JPR_SD"
+            "JPR","JPR_SD","PPR"
         ]
     )
 
@@ -84,3 +84,11 @@ model = Pipeline([
     ("scaler", StandardScaler()),
     ("svm", SVR())
 ])
+
+if __name__=="__main__":
+    df=pd.read_excel(r"D:\skripsi_oneng\ml_mn_cur.xlsx")
+    X= build_features(df)
+    y = df["PPR"]
+
+    print()
+    #train_rand_df, test_rand_df=random_split(X,y, test_size=0.2,)
