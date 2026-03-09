@@ -8,7 +8,10 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
-from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV, RandomizedSearchCV
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+from xgboost import XGBRegressor
+
 
 
 def smiles_to_ecfp(smiles, radius=2, n_bits=2048):
