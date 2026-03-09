@@ -174,6 +174,132 @@ def plot_prediction(y_true, y_pred):
     plt.show()
 
 
+def random_forest_cv(X_train, y_train, n_iter=100):
+
+    pipeline = make_pipeline(
+        StandardScaler(),
+        RandomForestRegressor(random_state=42)
+    )
+
+    param_dist = {
+        "randomforestregressor__n_estimators": [200, 500, 800, 1000],
+        "randomforestregressor__max_depth": [None, 5, 10, 20, 40],
+        "randomforestregressor__min_samples_split": [2, 5, 10],
+        "randomforestregressor__min_samples_leaf": [1, 2, 4],
+        "randomforestregressor__max_features": ["sqrt", "log2", None],
+        "randomforestregressor__bootstrap": [True, False]
+    }
+
+    random_search = RandomizedSearchCV(
+        pipeline,
+        param_distributions=param_dist,
+        n_iter=n_iter,
+        cv=5,
+        scoring="neg_mean_squared_error",
+        n_jobs=-1,
+        random_state=42
+    )
+
+    random_search.fit(X_train, y_train)
+
+    rmse = np.sqrt(-random_search.best_score_)
+
+    print("Best params:", random_search.best_params_)
+    print("CV RMSE:", rmse)
+
+    return random_search, rmse
+
+
+def xgboost_cv(X_train, y_train, n_iter=100):
+
+    model = XGBRegressor(
+        objective="reg:squarederror",
+        random_state=42,
+        n_jobs=-1
+    )
+
+    param_dist = {
+        "n_estimators": [200, 400, 600, 800, 1000],
+        "max_depth": [3, 4, 5, 6, 8, 10],
+        "learning_rate": [0.001, 0.01, 0.05, 0.1, 0.2],
+        "subsample": [0.6, 0.8, 1.0],
+        "colsample_bytree": [0.6, 0.8, 1.0],
+        "gamma": [0, 0.1, 0.2, 0.5],
+        "reg_alpha": [0, 0.01, 0.1, 1],
+        "reg_lambda": [1, 2, 5]
+    }
+
+    random_search = RandomizedSearchCV(
+        model,
+        param_distributions=param_dist,
+        n_iter=n_iter,
+        cv=5,
+        scoring="neg_mean_squared_error",
+        n_jobs=-1,
+        random_state=42
+    )
+
+    random_search.fit(X_train, y_train)
+
+    rmse = np.sqrt(-random_search.best_score_)
+
+    print("Best params:", random_search.best_params_)
+    print("CV RMSE:", rmse)
+
+    return random_search, rmse
+
+def linear_models_cv(X_train, y_train):
+
+    pipeline = make_pipeline(
+        StandardScaler(),
+        LinearRegression()
+    )
+
+    param_grid = [
+
+        # Ordinary Multiple Linear Regression
+        {
+            "linearregression": [LinearRegression()]
+        },
+
+        # Ridge Regression
+        {
+            "linearregression": [Ridge()],
+            "linearregression__alpha": [0.001, 0.01, 0.1, 1, 10, 100]
+        },
+
+        # Lasso Regression
+        {
+            "linearregression": [Lasso(max_iter=10000)],
+            "linearregression__alpha": [0.001, 0.01, 0.1, 1, 10]
+        },
+
+        # ElasticNet
+        {
+            "linearregression": [ElasticNet(max_iter=10000)],
+            "linearregression__alpha": [0.001, 0.01, 0.1, 1, 10],
+            "linearregression__l1_ratio": [0.1, 0.5, 0.9]
+        }
+    ]
+
+    grid = GridSearchCV(
+        pipeline,
+        param_grid,
+        cv=5,
+        scoring="neg_mean_squared_error",
+        n_jobs=-1
+    )
+
+    grid.fit(X_train, y_train)
+
+    rmse = np.sqrt(-grid.best_score_)
+
+    print("Best model:", type(grid.best_estimator_.named_steps['linearregression']).__name__)
+    print("Best params:", grid.best_params_)
+    print("CV RMSE:", rmse)
+
+    return grid, rmse
+
 if __name__=="__main__":
     df = pd.read_excel(r"C:\fatiha.xlsx")
 
