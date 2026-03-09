@@ -111,11 +111,32 @@ def svm_cv_tuned(X_train, y_train):
         SVR()
     )
 
-    param_grid = {
-        "svr__C": [0.1, 1, 10, 100, 1000],
-        "svr__gamma": ["scale", 0.001, 0.01, 0.1, 1, 10],
-        "svr__epsilon": [0.001, 0.01, 0.1, 0.5, 1]
-    }
+    param_grid = [
+
+        # RBF kernel
+        {
+            "svr__kernel": ["rbf"],
+            "svr__C": [0.1, 1, 10, 100, 1000],
+            "svr__gamma": ["scale", 0.001, 0.01, 0.1, 1],
+            "svr__epsilon": [0.001, 0.01, 0.1, 0.5]
+        },
+
+        # Linear kernel
+        {
+            "svr__kernel": ["linear"],
+            "svr__C": [0.1, 1, 10, 100, 1000],
+            "svr__epsilon": [0.001, 0.01, 0.1, 0.5]
+        },
+
+        # Polynomial kernel
+        {
+            "svr__kernel": ["poly"],
+            "svr__degree": [2, 3, 4],
+            "svr__C": [0.1, 1, 10, 100],
+            "svr__gamma": ["scale", 0.01, 0.1],
+            "svr__epsilon": [0.01, 0.1]
+        }
+    ]
 
     grid = GridSearchCV(
         pipeline,
@@ -130,6 +151,7 @@ def svm_cv_tuned(X_train, y_train):
     rmse = np.sqrt(-grid.best_score_)
 
     print("Best params:", grid.best_params_)
+    print("Best kernel:", grid.best_params_["svr__kernel"])
     print("CV RMSE:", rmse)
 
     return grid, rmse
