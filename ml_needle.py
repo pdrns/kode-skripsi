@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import scipy.stats as stats
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -13,6 +14,10 @@ from sklearn.model_selection import train_test_split, KFold, cross_val_score, Gr
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
 from xgboost import XGBRegressor
 from joblib import dump
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+
 
 
 def smiles_to_ecfp(smiles, radius=2, n_bits=2048):
@@ -31,7 +36,7 @@ def smiles_to_ecfp(smiles, radius=2, n_bits=2048):
     return np.array(fp)
 
 
-def extract_polymer_features(row):
+def extract_polymer_features(row, radius, n_bits):
 
     fps = []
 
@@ -40,20 +45,20 @@ def extract_polymer_features(row):
         smiles = row[col]
 
         if pd.isna(smiles):
-            fps.append(np.zeros(1024))
+            fps.append(np.zeros(n_bits))
         else:
-            fps.append(smiles_to_ecfp(smiles, n_bits=1024))
+            fps.append(smiles_to_ecfp(smiles, radius = radius, n_bits=n_bits))
 
     return np.concatenate(fps)
 
-def build_features(df):
+def build_features(df, radius, n_bits):
 
     ligand_features = np.vstack(
-        df["SMILES"].apply(smiles_to_ecfp)
+        df["SMILES"].apply(smiles_to_ecfp, args=(radius, n_bits))
     )
 
     polymer_features = np.vstack(
-        df.apply(extract_polymer_features, axis=1)
+        df.apply(extract_polymer_features, args=(radius, n_bits), axis=1)
     )
 
     categorical = pd.get_dummies(
@@ -186,12 +191,11 @@ def random_forest_cv(X_train, y_train, n_iter=100):
     )
 
     param_dist = {
-        "randomforestregressor__n_estimators": [100, 200, 500, 800, 1000],
-        "randomforestregressor__max_depth": [None, 5, 10, 20, 40],
+        "randomforestregressor__n_estimators": [100, 200, 500, 800, 100],
+        "randomforestregressor__max_depth": [None, 20, 40],
         "randomforestregressor__min_samples_split": [2, 5, 10],
         "randomforestregressor__min_samples_leaf": [1, 2, 4],
-        "randomforestregressor__max_features": ["sqrt", "log2", None],
-        "randomforestregressor__bootstrap": [True, False]
+        "randomforestregressor__max_features": ["sqrt", "log2"]
     }
 
     random_search = RandomizedSearchCV(
@@ -223,14 +227,12 @@ def xgboost_cv(X_train, y_train, n_iter=100):
     )
 
     param_dist = {
-        "n_estimators": [200, 400, 600, 800, 1000],
-        "max_depth": [3, 4, 5, 6, 8, 10],
-        "learning_rate": [0.001, 0.01, 0.05, 0.1, 0.2],
-        "subsample": [0.6, 0.8, 1.0],
-        "colsample_bytree": [0.6, 0.8, 1.0],
-        "gamma": [0, 0.1, 0.2, 0.5],
-        "reg_alpha": [0, 0.01, 0.1, 1],
-        "reg_lambda": [1, 2, 5]
+        "max_depth": [2, 4, 6, 8, 16, 32],
+        "min_child_weight": [1, 5, 10],
+        "subsample": [0.4, 0.6, 1.0],
+        "colsample_bytree": [0.5, 0.8, 1.0],
+        "gamma": [0, 0.1, 0.5]
+        
     }
 
     random_search = RandomizedSearchCV(
@@ -323,24 +325,28 @@ if __name__=="__main__":
     output_dir = r"D:\skripsi_oneng\ml_mn_cur_akhir.xlsx"
     os.makedirs(output_dir, exist_ok=True)
 
-    algorithm = "MLR"
+
+    radius = 1
+    n_bits = 1024
+    algorithm = "XGB"
+
     df  = pd.read_excel(input_path)
     initial_count = len(df)
     print(f"Total data mentah: {initial_count} baris.")
 
     df = df.drop(columns=["ZA","REF"],errors="ignore")
     
-    X = build_features(df)
+    X = build_features(df, radius=radius, n_bits=n_bits)
     y = df["PPR"].values
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, 
         y, 
-        test_size=0.2, 
+        test_size=0.3, 
         random_state=42
     )
 
-    grid, cv_rmse = linear_models_cv(X_train, y_train)
+    grid, cv_rmse = xgboost_cv(X_train, y_train, n_iter=100)
     best_model = grid.best_estimator_
 
     y_pred_train = best_model.predict(X_train)
@@ -354,16 +360,28 @@ if __name__=="__main__":
     "y_pred_test": y_pred_test
         })
 
-    df_test.to_excel(f"{algorithm}_pred_test.xlsx", index=False)
+    df_test.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_test.xlsx", index=False)
 
     df_train = pd.DataFrame({
     "y_train": y_train,
     "y_pred_train": y_pred_train
         })
 
-    df_train.to_excel(f"{algorithm}_pred_train.xlsx", index=False)
+    df_train.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_train.xlsx", index=False)
 
-    dump(grid, f"{algorithm}_grid_search.pkl")
+    dump(grid, f"{algorithm}_r{radius}n{n_bits}_PPR_grid_search.pkl")
 
-    dump(grid.best_estimator_, f"{algorithm}_best_model.pkl")
+    dump(grid.best_estimator_, f"{algorithm}_r{radius}n{n_bits}_PPR_best_model.pkl")
+
+    r2_train = r2_score(y_train, y_pred_train)
+    r2_test = r2_score(y_test, y_pred_test)
+
+    mse_train = mean_squared_error(y_train, y_pred_train)
+    mse_test = mean_squared_error(y_test, y_pred_test)
+
+    mae_train = mean_absolute_error(y_train, y_pred_train)
+    mae_test = mean_absolute_error(y_test, y_pred_test)
+
+    statistic, pvalue_train = stats.spearmanr(y_train, y_pred_train)
+    statistic, pvalue_test = stats.spearmanr(y_test, y_pred_test)
     print("test")
