@@ -51,39 +51,62 @@ def extract_polymer_features(row, radius, n_bits):
 
     return np.concatenate(fps)
 
-def build_features(df, radius, n_bits):
+def build_features(
+    df,
+    radius=2,
+    n_bits=2048,
+    use_smiles=True,
+    use_polymer=False,
+    use_categorical=True,
+    use_numeric=True
+):
 
-    ligand_features = np.vstack(
-        df["SMILES"].apply(smiles_to_ecfp, args=(radius, n_bits))
-    )
+    features = []
 
-    polymer_features = np.vstack(
-        df.apply(extract_polymer_features, args=(radius, n_bits), axis=1)
-    )
+    if use_smiles and "SMILES" in df.columns:
 
-    categorical = pd.get_dummies(
-        df[["GMT","MBR"]]
-    ).values
+        ligand_features = np.vstack(
+            df["SMILES"].apply(smiles_to_ecfp, args=(radius, n_bits))
+        )
 
-    numeric_cols = df.drop(
-        columns=[
+        features.append(ligand_features)
+
+    if use_polymer:
+
+        polymer_features = np.vstack(
+            df.apply(extract_polymer_features, args=(radius, n_bits), axis=1)
+        )
+
+        features.append(polymer_features)
+
+    if use_categorical:
+        cat_cols = [c for c in ["GMT", "MBR"] if c in df.columns]
+
+        if len(cat_cols) > 0:
+            categorical = pd.get_dummies(df[cat_cols]).values
+
+            features.append(categorical)
+
+    if use_numeric:
+        drop_cols = [
             "SMILES","poli1","poli2","poli3",
             "GMT","MBR",
             "JPR","JPR_SD","PPR"
         ]
-    )
 
-    numeric = numeric_cols.values
+        numeric_cols = df.drop(
+            columns=[c for c in drop_cols if c in df.columns]
+        )
 
-    X = np.concatenate([
-        ligand_features,
-        polymer_features,
-        categorical,
-        numeric
-    ], axis=1)
+        if numeric_cols.shape[1] > 0:
+            numeric = numeric_cols.values
+
+            features.append(numeric)
+
+    X = np.concatenate(features, axis=1)
 
     return X
-
+    
 def svm_cross_validation(X_train, y_train, folds=5):
 
     model = make_pipeline(
@@ -322,10 +345,7 @@ def generate_and_save_folds(df, n_splits=5, random_state=42, output_dir="cv_fold
 
 if __name__=="__main__":
     input_path = r"D:\skripsi_oneng\ml_mn_cur.xlsx"
-    output_dir = r"D:\skripsi_oneng\ml_mn_cur_akhir.xlsx"
-    os.makedirs(output_dir, exist_ok=True)
-
-
+    
     radius = 2
     n_bits = 2048
     algorithm = "XGB"
@@ -336,7 +356,7 @@ if __name__=="__main__":
 
     df = df.drop(columns=["ZA","REF"],errors="ignore")
     
-    X = build_features(df, radius=radius, n_bits=n_bits)
+    X = build_features(df, radius=radius, n_bits=n_bits, use_polymer = False)
     y = df["PPR"].values
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -346,7 +366,18 @@ if __name__=="__main__":
         random_state=42
     )
 
-    grid, cv_rmse = xgboost_cv(X_train, y_train, n_iter=100)
+    if algorithm == "MLR":
+        grid, cv_rmse = linear_models_cv(X_train, y_train)
+    
+    elif algorithm == "RF":
+        grid, cv_rmse = random_forest_cv(X_train, y_train, n_iter=100)
+    
+    elif algorithm == "XGB":
+        grid, cv_rmse = xgboost_cv(X_train, y_train, n_iter=100)
+    
+    else:
+        raise ValueError("Algorithm not recognized")
+
     best_model = grid.best_estimator_
 
     y_pred_train = best_model.predict(X_train)
@@ -385,6 +416,21 @@ if __name__=="__main__":
     mae_train = mean_absolute_error(y_train, y_pred_train)
     mae_test = mean_absolute_error(y_test, y_pred_test)
 
-    statistic, pvalue_train = stats.spearmanr(y_train, y_pred_train)
-    statistic, pvalue_test = stats.spearmanr(y_test, y_pred_test)
-    print("test")
+    spearman_train, pvalue_train = stats.spearmanr(y_train, y_pred_train)
+    spearman_test, pvalue_test = stats.spearmanr(y_test, y_pred_test)
+
+    metrics_df = pd.DataFrame({
+    "Dataset": ["Train", "Test"],
+    "R2": [r2_train, r2_test],
+    "RMSE": [rmse_train, rmse_test],
+    "MAE": [mae_train, mae_test],
+    "Spearman": [spearman_train, spearman_test],
+    "Spearman_pvalue": [pvalue_train, pvalue_test]
+    })
+
+    metrics_df.to_excel(
+    f"{algorithm}_r{radius}n{n_bits}_PPR_metrics.xlsx",
+    index=False
+    )
+
+    print(metrics_df)
