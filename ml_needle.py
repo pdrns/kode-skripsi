@@ -326,8 +326,8 @@ if __name__=="__main__":
     os.makedirs(output_dir, exist_ok=True)
 
 
-    radius = 1
-    n_bits = 1024
+    radius = 2
+    n_bits = 2048
     algorithm = "XGB"
 
     df  = pd.read_excel(input_path)
@@ -378,6 +378,9 @@ if __name__=="__main__":
 
     mse_train = mean_squared_error(y_train, y_pred_train)
     mse_test = mean_squared_error(y_test, y_pred_test)
+
+    rmse_train = np.sqrt(mse_train)
+    rmse_test = np.sqrt(mse_test)
 
     mae_train = mean_absolute_error(y_train, y_pred_train)
     mae_test = mean_absolute_error(y_test, y_pred_test)
