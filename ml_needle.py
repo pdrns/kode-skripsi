@@ -341,7 +341,28 @@ def generate_and_save_folds(df, n_splits=5, random_state=42, output_dir="cv_fold
         fold_key = f"fold_{fold_idx}"
         fold_train.to_excel(writer, sheet_name=f"{fold_key}_train", index=False)
         fold_val.to_excel(writer, sheet_name=f"{fold_key}_val", index=False)
-        
+
+def plot_yy(y_true, y_pred, title, filename):
+
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    plt.figure(figsize=(6,6))
+
+    plt.scatter(y_true, y_pred, alpha=0.7)
+
+    min_val = min(y_true.min(), y_pred.min())
+    max_val = max(y_true.max(), y_pred.max())
+
+    plt.plot([min_val, max_val], [min_val, max_val], '--')
+
+    plt.xlabel("True")
+    plt.ylabel("Predicted")
+    plt.title(title)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
+    plt.close()        
 
 if __name__=="__main__":
     input_path = r"D:\skripsi_oneng\ml_mn_cur.xlsx"
@@ -410,7 +431,14 @@ if __name__=="__main__":
                 "MAE": mae,
                 "Spearman": spearman
             })
-        
+    
+            plot_yy(
+                y_test,
+                y_pred_test,
+                title=f"{algorithm} Test Repeat {i+1}",
+                filename=f"{algorithm}_repeat{i+1}_test.png"
+            )
+            
         metrics_df = pd.DataFrame(metrics_list)
         
         summary = metrics_df.mean(numeric_only=True)
