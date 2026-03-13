@@ -13,7 +13,7 @@ from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV, RandomizedSearchCV
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
 from xgboost import XGBRegressor
-from joblib import dump
+from joblib import dump, load
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
@@ -348,7 +348,7 @@ if __name__=="__main__":
     
     radius = 2
     n_bits = 2048
-    algorithm = "XGB"
+    algorithm = "MLR"
 
     df  = pd.read_excel(input_path)
     initial_count = len(df)
@@ -361,10 +361,13 @@ if __name__=="__main__":
 
 
     if 1: # pengulangan (default 5 kali)
-        
+        grid = load(f"{algorithm}_r{radius}n{n_bits}_PPR_best_model.pkl")        
         n_repeats = 5
         
-        
+        metrics_list = []
+
+        best_params = grid[1]
+
         for i in range(n_repeats):
         
             X_train, X_test, y_train, y_test = train_test_split(
@@ -376,7 +379,7 @@ if __name__=="__main__":
         
             # rebuild model dengan hyperparameter terbaik
             if algorithm == "MLR":
-                model = grid.best_estimator_
+                model = grid[1]
         
             elif algorithm == "RF":
                 model = RandomForestRegressor(
