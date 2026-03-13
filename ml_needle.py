@@ -359,78 +359,141 @@ if __name__=="__main__":
     X = build_features(df, radius=radius, n_bits=n_bits, use_polymer = False)
     y = df["PPR"].values
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, 
-        y, 
-        test_size=0.3, 
-        random_state=42
-    )
 
-    if algorithm == "MLR":
-        grid, cv_rmse = linear_models_cv(X_train, y_train)
+    if 1: # pengulangan (default 5 kali)
+        
+        n_repeats = 5
+        
+        
+        for i in range(n_repeats):
+        
+            X_train, X_test, y_train, y_test = train_test_split(
+                X,
+                y,
+                test_size=0.3,
+                random_state=42 + i
+            )
+        
+            # rebuild model dengan hyperparameter terbaik
+            if algorithm == "MLR":
+                model = grid.best_estimator_
+        
+            elif algorithm == "RF":
+                model = RandomForestRegressor(
+                    **{k.split("__")[-1]: v for k,v in best_params.items()},
+                    random_state=42
+                )
+        
+            elif algorithm == "XGB":
+                model = XGBRegressor(
+                    **best_params,
+                    objective="reg:squarederror",
+                    random_state=42
+                )
+        
+            model.fit(X_train, y_train)
+        
+            y_pred_test = model.predict(X_test)
+        
+            r2 = r2_score(y_test, y_pred_test)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
+            mae = mean_absolute_error(y_test, y_pred_test)
+            spearman, pvalue = stats.spearmanr(y_test, y_pred_test)
+        
+            metrics_list.append({
+                "repeat": i+1,
+                "R2": r2,
+                "RMSE": rmse,
+                "MAE": mae,
+                "Spearman": spearman
+            })
+        
+        metrics_df = pd.DataFrame(metrics_list)
+        
+        summary = metrics_df.mean(numeric_only=True)
+        
+        print(metrics_df)
+        print("\nAverage metrics:")
+        print(summary)
+
+        metrics_df.to_excel(
+        f"{algorithm}_r{radius}n{n_bits}_PPR_repeated_test_metrics.xlsx",
+        index=False
+        )
+
+    if 0: # 1 kali
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, 
+            y, 
+            test_size=0.3, 
+            random_state=42
+        )
     
-    elif algorithm == "RF":
-        grid, cv_rmse = random_forest_cv(X_train, y_train, n_iter=100)
+        if algorithm == "MLR":
+            grid, cv_rmse = linear_models_cv(X_train, y_train)
+        
+        elif algorithm == "RF":
+            grid, cv_rmse = random_forest_cv(X_train, y_train, n_iter=100)
+        
+        elif algorithm == "XGB":
+            grid, cv_rmse = xgboost_cv(X_train, y_train, n_iter=100)
+        
+        else:
+            raise ValueError("Algorithm not recognized")
     
-    elif algorithm == "XGB":
-        grid, cv_rmse = xgboost_cv(X_train, y_train, n_iter=100)
+        best_model = grid.best_estimator_
     
-    else:
-        raise ValueError("Algorithm not recognized")
-
-    best_model = grid.best_estimator_
-
-    y_pred_train = best_model.predict(X_train)
-    plot_prediction(y_train, y_pred_train, title = algorithm, mode = "train")
-
-    y_pred_test = best_model.predict(X_test)
-    plot_prediction(y_test, y_pred_test, title = algorithm, mode = "test")
-
-    df_test = pd.DataFrame({
-    "y_test": y_test,
-    "y_pred_test": y_pred_test
+        y_pred_train = best_model.predict(X_train)
+        plot_prediction(y_train, y_pred_train, title = algorithm, mode = "train")
+    
+        y_pred_test = best_model.predict(X_test)
+        plot_prediction(y_test, y_pred_test, title = algorithm, mode = "test")
+    
+        df_test = pd.DataFrame({
+        "y_test": y_test,
+        "y_pred_test": y_pred_test
+            })
+    
+        df_test.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_test.xlsx", index=False)
+    
+        df_train = pd.DataFrame({
+        "y_train": y_train,
+        "y_pred_train": y_pred_train
+            })
+    
+        df_train.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_train.xlsx", index=False)
+    
+        dump(grid, f"{algorithm}_r{radius}n{n_bits}_PPR_grid_search.pkl")
+    
+        dump(grid.best_estimator_, f"{algorithm}_r{radius}n{n_bits}_PPR_best_model.pkl")
+    
+        r2_train = r2_score(y_train, y_pred_train)
+        r2_test = r2_score(y_test, y_pred_test)
+    
+        mse_train = mean_squared_error(y_train, y_pred_train)
+        mse_test = mean_squared_error(y_test, y_pred_test)
+    
+        rmse_train = np.sqrt(mse_train)
+        rmse_test = np.sqrt(mse_test)
+    
+        mae_train = mean_absolute_error(y_train, y_pred_train)
+        mae_test = mean_absolute_error(y_test, y_pred_test)
+    
+        spearman_train, pvalue_train = stats.spearmanr(y_train, y_pred_train)
+        spearman_test, pvalue_test = stats.spearmanr(y_test, y_pred_test)
+    
+        metrics_df = pd.DataFrame({
+        "Dataset": ["Train", "Test"],
+        "R2": [r2_train, r2_test],
+        "RMSE": [rmse_train, rmse_test],
+        "MAE": [mae_train, mae_test],
+        "Spearman": [spearman_train, spearman_test],
+        "Spearman_pvalue": [pvalue_train, pvalue_test]
         })
-
-    df_test.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_test.xlsx", index=False)
-
-    df_train = pd.DataFrame({
-    "y_train": y_train,
-    "y_pred_train": y_pred_train
-        })
-
-    df_train.to_excel(f"{algorithm}_r{radius}n{n_bits}_pred_PPR_train.xlsx", index=False)
-
-    dump(grid, f"{algorithm}_r{radius}n{n_bits}_PPR_grid_search.pkl")
-
-    dump(grid.best_estimator_, f"{algorithm}_r{radius}n{n_bits}_PPR_best_model.pkl")
-
-    r2_train = r2_score(y_train, y_pred_train)
-    r2_test = r2_score(y_test, y_pred_test)
-
-    mse_train = mean_squared_error(y_train, y_pred_train)
-    mse_test = mean_squared_error(y_test, y_pred_test)
-
-    rmse_train = np.sqrt(mse_train)
-    rmse_test = np.sqrt(mse_test)
-
-    mae_train = mean_absolute_error(y_train, y_pred_train)
-    mae_test = mean_absolute_error(y_test, y_pred_test)
-
-    spearman_train, pvalue_train = stats.spearmanr(y_train, y_pred_train)
-    spearman_test, pvalue_test = stats.spearmanr(y_test, y_pred_test)
-
-    metrics_df = pd.DataFrame({
-    "Dataset": ["Train", "Test"],
-    "R2": [r2_train, r2_test],
-    "RMSE": [rmse_train, rmse_test],
-    "MAE": [mae_train, mae_test],
-    "Spearman": [spearman_train, spearman_test],
-    "Spearman_pvalue": [pvalue_train, pvalue_test]
-    })
-
-    metrics_df.to_excel(
-    f"{algorithm}_r{radius}n{n_bits}_PPR_metrics.xlsx",
-    index=False
-    )
-
-    print(metrics_df)
+    
+        metrics_df.to_excel(
+        f"{algorithm}_r{radius}n{n_bits}_PPR_metrics.xlsx",
+        index=False
+        )
+    
+        print(metrics_df)
